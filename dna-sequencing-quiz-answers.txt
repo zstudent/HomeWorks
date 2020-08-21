@@ -1,0 +1,11 @@
+Week 1:
+1 - CAT
+2 - CACAC
+3 - GCC
+4 - Second-generation sequencing
+5 - Which chromosome the read originated from
+6 - Sequencing read  (?)
+7 - De novo shotgun assembly problem
+8 - y-x+1
+9 - x(y-x+1)
+10 - Minimum 
