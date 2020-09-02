@@ -1,68 +1,55 @@
-import bisect
+from collections import defaultdict
 
-def readGenome(filename):
-    genome = ''
-    with open(filename, 'r') as f:
-        for line in f:
-            # ignore header line with genome information
-            if not line[0] == '>':
-                genome += line.rstrip()
-    return genome
 
-class Index(object):
-    def __init__(self, t, k):
-        self.k = k
-        self.index = []
-        for i in range(len(t) - k + 1):
-            self.index.append((t[i:i + k], i))
-        self.index.sort()
-
-    def query(self, p):
-        kmer = p[:self.k]
-        i = bisect.bisect_left(self.index, (kmer, -1))
-        hits = []
-        while i < len(self.index):
-            if self.index[i][0] != kmer:
+def readFastq(filename):
+    sequences = []
+    qualities = []
+    with open(filename) as fh:
+        while True:
+            fh.readline()
+            seq = fh.readline().rstrip()
+            fh.readline()
+            qual = fh.readline().rstrip()
+            if len(seq) == 0:
                 break
-            hits.append(self.index[i][1])
-            i += 1
-        return hits
+            sequences.append(seq)
+            qualities.append(qual)
+    return sequences, qualities
 
 
-def approximate_match(p, t, n):
-    segment_length = int(round(len(p) / (n+1)))
-    all_matches = set()
-    p_idx = Index(t, segment_length)
-    idx_hits = 0
-    for i in range(n+1):
-        start = i*segment_length
-        end = min((i+1)*segment_length, len(p))
-        matches = p_idx.query(p[start:end])
+def overlap(a, b, min_length=3):
+    start = 0
+    while True:
+        start = a.find(b[:min_length], start)
+        if start == -1:
+            return 0
 
-        for m in matches:
-            idx_hits += 1
-            if m < start or m-start+len(p) > len(t):
-                continue
-
-            mismatches = 0
-
-            for j in range(0, start):
-                if not p[j] == t[m-start+j]:
-                    mismatches += 1
-                    if mismatches > n:
-                        break
-            for j in range(end, len(p)):
-                if not p[j] == t[m-start+j]:
-                    mismatches += 1
-                    if mismatches > n:
-                        break
-
-            if mismatches <= n:
-                all_matches.add(m - start)
-    return list(all_matches), idx_hits
+        if b.startswith(a[start:]):
+            return len(a) - start
+        start += 1
 
 
-p = "GGCGCGGTGGCTCACGCCTGTAAT"
-chr1 = readGenome('chr1.GRCh38.excerpt.fasta')
+def overlap_graph(reads, k):
 
-print(len(approximate_match(p, chr1, 2)[0]))
+    index = defaultdict(set)
+    for read in reads:
+        for i in range(len(read) - k + 1):
+            index[read[i:i + k]].add(read)
+
+
+    graph = defaultdict(set)
+    for r in reads:
+        for o in index[r[-k:]]:
+            if r != o:
+                if overlap(r, o, k):
+                    graph[r].add(o)
+
+    edges = 0
+    for read in graph:
+        edges += len(graph[read])
+    return (edges, len(graph))
+
+
+seqs, quals = readFastq('ERR266411_1.for_asm.fastq')
+edges, suffixes = overlap_graph(seqs, 30)
+print(suffixes)

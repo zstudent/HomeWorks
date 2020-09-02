@@ -1,41 +1,53 @@
-from bm_preproc import BoyerMoore
-
-def readGenome(filename):
-    genome = ''
-    with open(filename, 'r') as f:
-        for line in f:
-
-            if not line[0] == '>':
-                genome += line.rstrip()
-    return genome
-
-def boyer_moore(p, p_bm, t):
-    i = 0
-    occurrences = []
-    comparisons = 0
-    alignments = 0
-    while i < len(t) - len(p) + 1:
-        alignments += 1
-        shift = 1
-        mismatched = False
-        for j in range(len(p)-1, -1, -1):
-            comparisons += 1
-            if p[j] != t[i+j]:
-                skip_bc = p_bm.bad_character_rule(j, t[i+j])
-                skip_gs = p_bm.good_suffix_rule(j)
-                shift = max(shift, skip_bc, skip_gs)
-                mismatched = True
+from collections import defaultdict
+def readFastq(filename):
+    sequences = []
+    qualities = []
+    with open(filename) as fh:
+        while True:
+            fh.readline()
+            seq = fh.readline().rstrip()
+            fh.readline()
+            qual = fh.readline().rstrip()
+            if len(seq) == 0:
                 break
-        if not mismatched:
-            occurrences.append(i)
-            skip_gs = p_bm.match_skip()
-            shift = max(shift, skip_gs)
-        i += shift
-    return occurrences, comparisons, alignments
+            sequences.append(seq)
+            qualities.append(qual)
+    return sequences, qualities
 
 
-p = "GGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGGGAGGCCGAGG"
-chr1 = readGenome("chr1.GRCh38.excerpt.fasta")
-p_bm = BoyerMoore(p)
+def overlap(a, b, min_length=3):
+    start = 0
+    while True:
+        start = a.find(b[:min_length], start)
+        if start == -1:
+            return 0
 
-print(boyer_moore(p, p_bm, chr1)[2])
+        if b.startswith(a[start:]):
+            return len(a) - start
+        start += 1
+
+
+def overlap_graph(reads, k):
+
+    index = defaultdict(set)
+    for read in reads:
+        for i in range(len(read) - k + 1):
+            index[read[i:i + k]].add(read)
+
+
+    graph = defaultdict(set)
+    for r in reads:
+        for o in index[r[-k:]]:
+            if r != o:
+                if overlap(r, o, k):
+                    graph[r].add(o)
+
+    edges = 0
+    for read in graph:
+        edges += len(graph[read])
+    return (edges, len(graph))
+
+
+seqs, quals = readFastq('ERR266411_1.for_asm.fastq')
+edges, suffixes = overlap_graph(seqs, 30)
+print(edges)
